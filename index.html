@@ -1,0 +1,4014 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet-search.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title></title>
+    </head>
+    <body>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/multi-style-layer.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="js/leaflet-search.js"></script>
+        <script src="data/AngeloTemakortFrededefortidsminderlinje_1.js"></script>
+        <script src="data/AngeloTemakortHvidovreLokalplan_2.js"></script>
+        <script src="data/strandbeskyttelsehvidovre_3.js"></script>
+        <script src="data/Folkeskoler_4.js"></script>
+        <script src="data/Togstationer_5.js"></script>
+        <script src="data/Kirker_6.js"></script>
+        <script src="data/Bibliotek_7.js"></script>
+        <script src="data/kommuneplan_8.js"></script>
+        <script src="data/frededeomrder_9.js"></script>
+        <script src="data/MarcTemakortPizzarier_10.js"></script>
+        <script>
+        var highlightLayer;
+        function highlightFeature(e) {
+            highlightLayer = e.target;
+
+            if (e.target.feature.geometry.type === 'LineString' || e.target.feature.geometry.type === 'MultiLineString') {
+              highlightLayer.setStyle({
+                color: '#ffff00',
+              });
+            } else {
+              highlightLayer.setStyle({
+                fillColor: '#ffff00',
+                fillOpacity: 1
+              });
+            }
+        }
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        })
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+            if (bounds_group.getLayers().length) {
+                map.fitBounds(bounds_group.getBounds());
+            }
+        }
+        map.createPane('pane_Positronnolabelsretina_0');
+        map.getPane('pane_Positronnolabelsretina_0').style.zIndex = 400;
+        var layer_Positronnolabelsretina_0 = L.tileLayer('https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png', {
+            pane: 'pane_Positronnolabelsretina_0',
+            opacity: 1.0,
+            attribution: '<a href="https://cartodb.com/basemaps/">Map tiles by CartoDB, under CC BY 3.0. Data by OpenStreetMap, under ODbL.</a>',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 20
+        });
+        layer_Positronnolabelsretina_0;
+        map.addLayer(layer_Positronnolabelsretina_0);
+        function pop_AngeloTemakortFrededefortidsminderlinje_1(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['lokalitet_linje_lbnr'] !== null ? autolinker.link(String(feature.properties['lokalitet_linje_lbnr']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['systemnr'] !== null ? autolinker.link(String(feature.properties['systemnr']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['stednr'] !== null ? autolinker.link(String(feature.properties['stednr']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['loknr'] !== null ? autolinker.link(String(feature.properties['loknr']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['sbext'] !== null ? autolinker.link(String(feature.properties['sbext']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['frednr'] !== null ? autolinker.link(String(feature.properties['frednr']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['anlaegstype'] !== null ? autolinker.link(String(feature.properties['anlaegstype']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['datering'] !== null ? autolinker.link(String(feature.properties['datering']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['zone'] !== null ? autolinker.link(String(feature.properties['zone']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['url'] !== null ? autolinker.link(String(feature.properties['url']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_AngeloTemakortFrededefortidsminderlinje_1_0() {
+            return {
+                pane: 'pane_AngeloTemakortFrededefortidsminderlinje_1',
+                opacity: 1,
+                color: 'rgba(243,166,178,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 1.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+        }
+        map.createPane('pane_AngeloTemakortFrededefortidsminderlinje_1');
+        map.getPane('pane_AngeloTemakortFrededefortidsminderlinje_1').style.zIndex = 401;
+        map.getPane('pane_AngeloTemakortFrededefortidsminderlinje_1').style['mix-blend-mode'] = 'normal';
+        var layer_AngeloTemakortFrededefortidsminderlinje_1 = new L.geoJson(json_AngeloTemakortFrededefortidsminderlinje_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_AngeloTemakortFrededefortidsminderlinje_1',
+            layerName: 'layer_AngeloTemakortFrededefortidsminderlinje_1',
+            pane: 'pane_AngeloTemakortFrededefortidsminderlinje_1',
+            onEachFeature: pop_AngeloTemakortFrededefortidsminderlinje_1,
+            style: style_AngeloTemakortFrededefortidsminderlinje_1_0,
+        });
+        bounds_group.addLayer(layer_AngeloTemakortFrededefortidsminderlinje_1);
+        map.addLayer(layer_AngeloTemakortFrededefortidsminderlinje_1);
+        function pop_AngeloTemakortHvidovreLokalplan_2(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_AngeloTemakortHvidovreLokalplan_2_0(feature) {
+            switch(String(feature.properties['FID'])) {
+                case '0':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(247,251,255,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '1':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(246,250,255,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '2':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(245,250,254,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '3':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(244,249,254,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '4':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(243,248,254,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '5':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(241,247,253,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '6':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(240,247,253,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '7':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(239,246,252,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '8':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(238,245,252,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '9':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(237,245,252,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '10':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(236,244,251,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '11':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(235,243,251,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '12':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(234,242,251,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '13':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(232,242,250,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '14':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(231,241,250,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '15':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(230,240,250,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '16':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(229,240,249,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '17':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(228,239,249,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '18':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(227,238,249,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '19':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(226,237,248,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '20':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(225,237,248,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '21':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(224,236,247,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '22':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(222,235,247,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '23':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(221,235,247,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '24':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(220,234,246,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '25':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(219,233,246,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '26':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(218,232,246,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '27':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(217,232,245,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '28':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(216,231,245,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '29':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(215,230,245,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '30':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(214,230,244,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '31':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(213,229,244,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '32':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(212,228,244,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '33':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(211,227,243,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '34':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(210,227,243,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '35':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(208,226,242,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '36':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(207,225,242,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '37':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(206,225,242,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '38':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(205,224,241,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '39':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(204,223,241,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '40':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(203,222,241,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '41':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(202,222,240,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '42':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(201,221,240,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '43':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(200,220,240,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '44':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(199,220,239,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '45':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(197,219,239,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '46':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(196,218,238,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '47':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(194,217,238,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '48':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(192,217,237,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '49':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(190,216,236,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '50':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(189,215,236,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '51':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(187,214,235,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '52':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(185,213,234,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '53':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(183,213,234,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '54':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(181,212,233,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '55':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(180,211,233,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '56':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(178,210,232,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '57':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(176,210,231,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '58':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(174,209,231,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '59':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(172,208,230,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '60':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(171,207,229,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '61':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(169,207,229,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '62':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(167,206,228,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '63':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(165,205,228,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '64':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(164,204,227,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '65':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(162,204,226,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '66':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(160,203,226,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '67':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(158,202,225,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '68':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(156,201,225,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '69':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(154,200,224,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '70':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(151,198,224,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '71':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(149,197,223,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '72':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(147,196,223,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '73':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(144,195,222,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '74':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(142,193,222,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '75':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(140,192,221,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '76':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(138,191,221,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '77':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(135,190,220,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '78':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(133,188,220,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '79':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(131,187,219,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '80':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(129,186,219,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '81':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(126,185,218,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '82':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(124,183,218,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '83':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(122,182,217,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '84':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(119,181,217,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '85':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(117,180,216,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '86':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(115,178,216,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '87':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(113,177,215,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '88':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(110,176,215,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '89':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(108,175,214,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '90':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(106,173,214,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '91':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(104,172,213,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '92':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(102,171,212,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '93':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(100,170,211,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '94':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(99,168,211,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '95':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(97,167,210,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '96':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(95,166,209,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '97':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(93,165,209,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '98':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(91,163,208,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '99':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(89,162,207,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '100':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(88,161,206,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '101':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(86,160,206,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '102':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(84,158,205,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '103':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(82,157,204,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '104':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(80,156,204,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '105':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(78,155,203,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '106':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(77,153,202,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '107':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(75,152,201,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '108':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(73,151,201,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '109':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(71,150,200,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '110':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(69,148,199,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '111':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(67,147,199,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '112':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(66,146,198,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '113':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(64,144,197,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '114':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(63,143,196,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '115':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(61,141,196,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '116':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(60,140,195,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '117':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(58,138,194,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '118':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(57,137,193,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '119':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(55,135,193,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '120':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(54,134,192,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '121':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(52,132,191,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '122':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(51,131,190,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '123':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(49,129,189,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '124':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(48,128,189,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '125':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(47,127,188,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '126':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(45,125,187,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '127':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(44,124,186,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '128':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(42,122,186,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '129':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(41,121,185,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '130':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(39,119,184,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '131':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(38,118,183,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '132':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(36,116,183,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '133':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(35,115,182,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '134':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(33,113,181,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '135':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(32,112,180,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '136':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(31,110,179,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '137':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(30,109,178,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '138':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(28,107,176,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '139':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(27,105,175,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '140':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(26,104,174,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '141':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(25,102,173,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '142':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(24,101,172,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '143':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(22,99,170,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '144':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(21,98,169,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '145':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(20,96,168,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '146':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(19,95,167,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '147':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(17,93,165,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '148':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(16,92,164,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '149':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(15,90,163,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '150':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(14,88,162,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '151':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(13,87,161,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '152':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(11,85,159,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '153':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(10,84,158,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '154':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(9,82,157,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '155':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,81,155,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '156':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,79,153,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '157':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,77,150,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '158':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,75,147,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '159':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,73,144,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '160':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,71,141,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '161':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,69,138,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '162':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,67,135,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '163':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,65,133,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '164':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,63,130,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '165':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,61,127,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '166':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,60,124,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '167':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,58,121,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '168':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,56,118,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '169':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,54,116,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '170':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,52,113,0.309)',
+                interactive: true,
+            }
+                    break;
+                case '171':
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,50,110,0.309)',
+                interactive: true,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.309)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(8,48,107,0.309)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_AngeloTemakortHvidovreLokalplan_2');
+        map.getPane('pane_AngeloTemakortHvidovreLokalplan_2').style.zIndex = 402;
+        map.getPane('pane_AngeloTemakortHvidovreLokalplan_2').style['mix-blend-mode'] = 'normal';
+        var layer_AngeloTemakortHvidovreLokalplan_2 = new L.geoJson(json_AngeloTemakortHvidovreLokalplan_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_AngeloTemakortHvidovreLokalplan_2',
+            layerName: 'layer_AngeloTemakortHvidovreLokalplan_2',
+            pane: 'pane_AngeloTemakortHvidovreLokalplan_2',
+            onEachFeature: pop_AngeloTemakortHvidovreLokalplan_2,
+            style: style_AngeloTemakortHvidovreLokalplan_2_0,
+        });
+        bounds_group.addLayer(layer_AngeloTemakortHvidovreLokalplan_2);
+        map.addLayer(layer_AngeloTemakortHvidovreLokalplan_2);
+        function pop_strandbeskyttelsehvidovre_3(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['metadataproperty'] !== null ? autolinker.link(String(feature.properties['metadataproperty']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['description_href'] !== null ? autolinker.link(String(feature.properties['description_href']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['description_title'] !== null ? autolinker.link(String(feature.properties['description_title']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['description_nilreason'] !== null ? autolinker.link(String(feature.properties['description_nilreason']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['description'] !== null ? autolinker.link(String(feature.properties['description']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['descriptionreference_href'] !== null ? autolinker.link(String(feature.properties['descriptionreference_href']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['descriptionreference_title'] !== null ? autolinker.link(String(feature.properties['descriptionreference_title']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['descriptionreference_nilreason'] !== null ? autolinker.link(String(feature.properties['descriptionreference_nilreason']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['identifier_codespace'] !== null ? autolinker.link(String(feature.properties['identifier_codespace']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['identifier'] !== null ? autolinker.link(String(feature.properties['identifier']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['location_location'] !== null ? autolinker.link(String(feature.properties['location_location']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['forretningshaendelse'] !== null ? autolinker.link(String(feature.properties['forretningshaendelse']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['senestesaglokalid'] !== null ? autolinker.link(String(feature.properties['senestesaglokalid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['forretningsproces'] !== null ? autolinker.link(String(feature.properties['forretningsproces']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['id.namespace'] !== null ? autolinker.link(String(feature.properties['id.namespace']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['id.lokalid'] !== null ? autolinker.link(String(feature.properties['id.lokalid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['paataenkthandling'] !== null ? autolinker.link(String(feature.properties['paataenkthandling']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['registreringfra'] !== null ? autolinker.link(String(feature.properties['registreringfra']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['virkningfra'] !== null ? autolinker.link(String(feature.properties['virkningfra']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['virkningsaktoer'] !== null ? autolinker.link(String(feature.properties['virkningsaktoer']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['temafladeid'] !== null ? autolinker.link(String(feature.properties['temafladeid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['tematype'] !== null ? autolinker.link(String(feature.properties['tematype']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['jordstykkelokalid'] !== null ? autolinker.link(String(feature.properties['jordstykkelokalid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_strandbeskyttelsehvidovre_3_0() {
+            return {
+                pane: 'pane_strandbeskyttelsehvidovre_3',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,169,85,1.0)',
+                interactive: false,
+            }
+        }
+        map.createPane('pane_strandbeskyttelsehvidovre_3');
+        map.getPane('pane_strandbeskyttelsehvidovre_3').style.zIndex = 403;
+        map.getPane('pane_strandbeskyttelsehvidovre_3').style['mix-blend-mode'] = 'normal';
+        var layer_strandbeskyttelsehvidovre_3 = new L.geoJson(json_strandbeskyttelsehvidovre_3, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_strandbeskyttelsehvidovre_3',
+            layerName: 'layer_strandbeskyttelsehvidovre_3',
+            pane: 'pane_strandbeskyttelsehvidovre_3',
+            onEachFeature: pop_strandbeskyttelsehvidovre_3,
+            style: style_strandbeskyttelsehvidovre_3_0,
+        });
+        bounds_group.addLayer(layer_strandbeskyttelsehvidovre_3);
+        map.addLayer(layer_strandbeskyttelsehvidovre_3);
+        function pop_Folkeskoler_4(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Skolenavn'] !== null ? autolinker.link(String(feature.properties['Skolenavn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['adresse'] !== null ? autolinker.link(String(feature.properties['adresse']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['by'] !== null ? autolinker.link(String(feature.properties['by']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['hjemmeside'] !== null ? autolinker.link(String(feature.properties['hjemmeside']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Folkeskoler_4_0() {
+            return {
+                pane: 'pane_Folkeskoler_4',
+        rotationAngle: -0.15707970000000002,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Folkeskoler_4.svg',
+            iconSize: [15.2, 15.2]
+        }),
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Folkeskoler_4');
+        map.getPane('pane_Folkeskoler_4').style.zIndex = 404;
+        map.getPane('pane_Folkeskoler_4').style['mix-blend-mode'] = 'normal';
+        var layer_Folkeskoler_4 = new L.geoJson(json_Folkeskoler_4, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Folkeskoler_4',
+            layerName: 'layer_Folkeskoler_4',
+            pane: 'pane_Folkeskoler_4',
+            onEachFeature: pop_Folkeskoler_4,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Folkeskoler_4_0(feature));
+            },
+        });
+        bounds_group.addLayer(layer_Folkeskoler_4);
+        map.addLayer(layer_Folkeskoler_4);
+        function pop_Togstationer_5(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Name'] !== null ? autolinker.link(String(feature.properties['Name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Togstationer_5_0() {
+            return {
+                pane: 'pane_Togstationer_5',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Togstationer_5.svg',
+            iconSize: [15.2, 15.2]
+        }),
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Togstationer_5');
+        map.getPane('pane_Togstationer_5').style.zIndex = 405;
+        map.getPane('pane_Togstationer_5').style['mix-blend-mode'] = 'normal';
+        var layer_Togstationer_5 = new L.geoJson(json_Togstationer_5, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Togstationer_5',
+            layerName: 'layer_Togstationer_5',
+            pane: 'pane_Togstationer_5',
+            onEachFeature: pop_Togstationer_5,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Togstationer_5_0(feature));
+            },
+        });
+        bounds_group.addLayer(layer_Togstationer_5);
+        map.addLayer(layer_Togstationer_5);
+        function pop_Kirker_6(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['navn'] !== null ? autolinker.link(String(feature.properties['navn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['adresse'] !== null ? autolinker.link(String(feature.properties['adresse']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['by'] !== null ? autolinker.link(String(feature.properties['by']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Hjemmeside'] !== null ? autolinker.link(String(feature.properties['Hjemmeside']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['result_num'] !== null ? autolinker.link(String(feature.properties['result_num']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['display_na'] !== null ? autolinker.link(String(feature.properties['display_na']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['category'] !== null ? autolinker.link(String(feature.properties['category']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['type'] !== null ? autolinker.link(String(feature.properties['type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['latlong'] !== null ? autolinker.link(String(feature.properties['latlong']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Kirker_6_0() {
+            return {
+                pane: 'pane_Kirker_6',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Kirker_6.svg',
+            iconSize: [30.4, 30.4]
+        }),
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Kirker_6');
+        map.getPane('pane_Kirker_6').style.zIndex = 406;
+        map.getPane('pane_Kirker_6').style['mix-blend-mode'] = 'normal';
+        var layer_Kirker_6 = new L.geoJson(json_Kirker_6, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Kirker_6',
+            layerName: 'layer_Kirker_6',
+            pane: 'pane_Kirker_6',
+            onEachFeature: pop_Kirker_6,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Kirker_6_0(feature));
+            },
+        });
+        bounds_group.addLayer(layer_Kirker_6);
+        map.addLayer(layer_Kirker_6);
+        function pop_Bibliotek_7(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['navn'] !== null ? autolinker.link(String(feature.properties['navn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['adresse'] !== null ? autolinker.link(String(feature.properties['adresse']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['by'] !== null ? autolinker.link(String(feature.properties['by']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Hjemmeside'] !== null ? autolinker.link(String(feature.properties['Hjemmeside']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['result_num'] !== null ? autolinker.link(String(feature.properties['result_num']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['osm_id'] !== null ? autolinker.link(String(feature.properties['osm_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['display_na'] !== null ? autolinker.link(String(feature.properties['display_na']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['category'] !== null ? autolinker.link(String(feature.properties['category']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['type'] !== null ? autolinker.link(String(feature.properties['type']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['latlong'] !== null ? autolinker.link(String(feature.properties['latlong']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Bibliotek_7_0() {
+            return {
+                pane: 'pane_Bibliotek_7',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/Bibliotek_7.svg',
+            iconSize: [15.2, 15.2]
+        }),
+                interactive: true,
+            }
+        }
+        map.createPane('pane_Bibliotek_7');
+        map.getPane('pane_Bibliotek_7').style.zIndex = 407;
+        map.getPane('pane_Bibliotek_7').style['mix-blend-mode'] = 'normal';
+        var layer_Bibliotek_7 = new L.geoJson(json_Bibliotek_7, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Bibliotek_7',
+            layerName: 'layer_Bibliotek_7',
+            pane: 'pane_Bibliotek_7',
+            onEachFeature: pop_Bibliotek_7,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_Bibliotek_7_0(feature));
+            },
+        });
+        bounds_group.addLayer(layer_Bibliotek_7);
+        map.addLayer(layer_Bibliotek_7);
+        function pop_kommuneplan_8(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['plannavn'] !== null ? autolinker.link(String(feature.properties['plannavn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['doklink'] !== null ? autolinker.link(String(feature.properties['doklink']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_kommuneplan_8_0() {
+            return {
+                pane: 'pane_kommuneplan_8',
+                opacity: 1,
+                color: 'rgba(247,88,3,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 4.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+        }
+        map.createPane('pane_kommuneplan_8');
+        map.getPane('pane_kommuneplan_8').style.zIndex = 408;
+        map.getPane('pane_kommuneplan_8').style['mix-blend-mode'] = 'normal';
+        var layer_kommuneplan_8 = new L.geoJson(json_kommuneplan_8, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_kommuneplan_8',
+            layerName: 'layer_kommuneplan_8',
+            pane: 'pane_kommuneplan_8',
+            onEachFeature: pop_kommuneplan_8,
+            style: style_kommuneplan_8_0,
+        });
+        bounds_group.addLayer(layer_kommuneplan_8);
+        map.addLayer(layer_kommuneplan_8);
+        function pop_frededeomrder_9(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Temakode'] !== null ? autolinker.link(String(feature.properties['Temakode']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Temanavn'] !== null ? autolinker.link(String(feature.properties['Temanavn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Objekt_id'] !== null ? autolinker.link(String(feature.properties['Objekt_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Version_id'] !== null ? autolinker.link(String(feature.properties['Version_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Systid_fra'] !== null ? autolinker.link(String(feature.properties['Systid_fra']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Systid_til'] !== null ? autolinker.link(String(feature.properties['Systid_til']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Oprettet'] !== null ? autolinker.link(String(feature.properties['Oprettet']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Oprindkode'] !== null ? autolinker.link(String(feature.properties['Oprindkode']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Oprindelse'] !== null ? autolinker.link(String(feature.properties['Oprindelse']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Statuskode'] !== null ? autolinker.link(String(feature.properties['Statuskode']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Status'] !== null ? autolinker.link(String(feature.properties['Status']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Off_kode'] !== null ? autolinker.link(String(feature.properties['Off_kode']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Offentlig'] !== null ? autolinker.link(String(feature.properties['Offentlig']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['CVR_kode'] !== null ? autolinker.link(String(feature.properties['CVR_kode']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['CVR_navn'] !== null ? autolinker.link(String(feature.properties['CVR_navn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Bruger_id'] !== null ? autolinker.link(String(feature.properties['Bruger_id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Link'] !== null ? autolinker.link(String(feature.properties['Link']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Shape_area'] !== null ? autolinker.link(String(feature.properties['Shape_area']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Shape_leng'] !== null ? autolinker.link(String(feature.properties['Shape_leng']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Fred_tkode'] !== null ? autolinker.link(String(feature.properties['Fred_tkode']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Fred_tnavn'] !== null ? autolinker.link(String(feature.properties['Fred_tnavn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Reg_nr'] !== null ? autolinker.link(String(feature.properties['Reg_nr']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Fred_navn'] !== null ? autolinker.link(String(feature.properties['Fred_navn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Aendr_kode'] !== null ? autolinker.link(String(feature.properties['Aendr_kode']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Aendrbegr'] !== null ? autolinker.link(String(feature.properties['Aendrbegr']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Aar_fredn'] !== null ? autolinker.link(String(feature.properties['Aar_fredn']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Gyldig_fra'] !== null ? autolinker.link(String(feature.properties['Gyldig_fra']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Gyldig_til'] !== null ? autolinker.link(String(feature.properties['Gyldig_til']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#f7fcf5',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#d5efcf',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#9ed798',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#55b567',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#1d8641',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#00441b',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#f7fcf5',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#d5efcf',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#9ed798',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#55b567',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#1d8641',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        var pattern_frededeomrder_9_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#00441b',
+            opacity: 0.5,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_frededeomrder_9_0.addTo(map);
+        function style_frededeomrder_9_0(feature) {
+            switch(String(feature.properties['Fred_navn'])) {
+                case 'Damhuså':
+                    return {
+                pane: 'pane_frededeomrder_9',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_frededeomrder_9_0,
+                interactive: true,
+            }
+                    break;
+                case 'Kalvebod Kile':
+                    return {
+                pane: 'pane_frededeomrder_9',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_frededeomrder_9_0,
+                interactive: true,
+            }
+                    break;
+                case 'Rehbæks Eng':
+                    return {
+                pane: 'pane_frededeomrder_9',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_frededeomrder_9_0,
+                interactive: true,
+            }
+                    break;
+                case 'Vestvolden':
+                    return {
+                pane: 'pane_frededeomrder_9',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_frededeomrder_9_0,
+                interactive: true,
+            }
+                    break;
+                case 'Vigerslevparken, Damhussøen, Damhusengen, Krogebjergparken':
+                    return {
+                pane: 'pane_frededeomrder_9',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_frededeomrder_9_0,
+                interactive: true,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_frededeomrder_9',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_frededeomrder_9_0,
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        function style_frededeomrder_9_1(feature) {
+            switch(String(feature.properties['Fred_navn'])) {
+                case 'Damhuså':
+                    return {
+                pane: 'pane_frededeomrder_9',
+                opacity: 1,
+                color: 'rgba(247,252,245,0.5)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Kalvebod Kile':
+                    return {
+                pane: 'pane_frededeomrder_9',
+                opacity: 1,
+                color: 'rgba(213,239,207,0.5)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Rehbæks Eng':
+                    return {
+                pane: 'pane_frededeomrder_9',
+                opacity: 1,
+                color: 'rgba(158,215,152,0.5)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Vestvolden':
+                    return {
+                pane: 'pane_frededeomrder_9',
+                opacity: 1,
+                color: 'rgba(85,181,103,0.5)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                case 'Vigerslevparken, Damhussøen, Damhusengen, Krogebjergparken':
+                    return {
+                pane: 'pane_frededeomrder_9',
+                opacity: 1,
+                color: 'rgba(29,134,65,0.5)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_frededeomrder_9',
+                opacity: 1,
+                color: 'rgba(0,68,27,0.5)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_frededeomrder_9');
+        map.getPane('pane_frededeomrder_9').style.zIndex = 409;
+        map.getPane('pane_frededeomrder_9').style['mix-blend-mode'] = 'normal';
+        var layer_frededeomrder_9 = new L.geoJson.multiStyle(json_frededeomrder_9, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_frededeomrder_9',
+            layerName: 'layer_frededeomrder_9',
+            pane: 'pane_frededeomrder_9',
+            onEachFeature: pop_frededeomrder_9,
+            styles: [style_frededeomrder_9_0,style_frededeomrder_9_1,]
+        });
+        bounds_group.addLayer(layer_frededeomrder_9);
+        map.addLayer(layer_frededeomrder_9);
+        function pop_MarcTemakortPizzarier_10(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Name'] !== null ? autolinker.link(String(feature.properties['Name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['description'] !== null ? autolinker.link(String(feature.properties['description']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['altitudeMode'] !== null ? autolinker.link(String(feature.properties['altitudeMode']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['tessellate'] !== null ? autolinker.link(String(feature.properties['tessellate']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['extrude'] !== null ? autolinker.link(String(feature.properties['extrude']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['visibility'] !== null ? autolinker.link(String(feature.properties['visibility']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['drawOrder'] !== null ? autolinker.link(String(feature.properties['drawOrder']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['icon'] !== null ? autolinker.link(String(feature.properties['icon']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_MarcTemakortPizzarier_10_0() {
+            return {
+                pane: 'pane_MarcTemakortPizzarier_10',
+        rotationAngle: 0.0,
+        rotationOrigin: 'center center',
+        icon: L.icon({
+            iconUrl: 'markers/MarcTemakortPizzarier_10.svg',
+            iconSize: [22.799999999999997, 22.799999999999997]
+        }),
+                interactive: true,
+            }
+        }
+        map.createPane('pane_MarcTemakortPizzarier_10');
+        map.getPane('pane_MarcTemakortPizzarier_10').style.zIndex = 410;
+        map.getPane('pane_MarcTemakortPizzarier_10').style['mix-blend-mode'] = 'normal';
+        var layer_MarcTemakortPizzarier_10 = new L.geoJson(json_MarcTemakortPizzarier_10, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_MarcTemakortPizzarier_10',
+            layerName: 'layer_MarcTemakortPizzarier_10',
+            pane: 'pane_MarcTemakortPizzarier_10',
+            onEachFeature: pop_MarcTemakortPizzarier_10,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.marker(latlng, style_MarcTemakortPizzarier_10_0(feature));
+            },
+        });
+        bounds_group.addLayer(layer_MarcTemakortPizzarier_10);
+        map.addLayer(layer_MarcTemakortPizzarier_10);
+        const url = {"Nominatim OSM": "https://nominatim.openstreetmap.org/search?format=geojson&addressdetails=1&",
+        "France BAN": "https://api-adresse.data.gouv.fr/search/?"}
+        var photonControl = L.control.photon({
+            url: url["Nominatim OSM"],
+            feedbackLabel: '',
+            position: 'topleft',
+            includePosition: true,
+            initial: true,
+            // resultsHandler: myHandler,
+        }).addTo(map);
+        photonControl._container.childNodes[0].style.borderRadius="10px"
+        // Create a variable to store the geoJSON data
+        var x = null;
+        // Create a variable to store the marker
+        var marker = null;
+        // Add an event listener to the Photon control to create a marker from the returned geoJSON data
+        var z = null;
+        photonControl.on('selected', function(e) {
+            console.log(photonControl.search.resultsContainer);
+            if (x != null) {
+                map.removeLayer(obj3.marker);
+                map.removeLayer(x);
+            }
+            obj2.gcd = e.choice;
+            x = L.geoJSON(obj2.gcd).addTo(map);
+            var label = typeof obj2.gcd.properties.label === 'undefined' ? obj2.gcd.properties.display_name : obj2.gcd.properties.label;
+            obj3.marker = L.marker(x.getLayers()[0].getLatLng()).bindPopup(label).addTo(map);
+            map.setView(x.getLayers()[0].getLatLng(), 17);
+            z = typeof e.choice.properties.label === 'undefined'? e.choice.properties.display_name : e.choice.properties.label;
+            console.log(e);
+            e.target.input.value = z;
+        });
+        var search = document.getElementsByClassName("leaflet-photon leaflet-control")[0];
+        search.classList.add("leaflet-control-search")
+        search.style.display = "flex";
+        search.style.backgroundColor="rgba(255,255,255,0.5)" 
+
+        // Create the new button element
+        var button = document.createElement("div");
+        button.id = "gcd-button-control";
+        button.className = "gcd-gl-btn fa fa-search search-button";
+
+        // Insert the button at the beginning of the search control
+        search.insertBefore(button, search.firstChild);
+        last = search.lastChild;
+        last.style.display = "none";
+        button.addEventListener("click", function (e) {
+            if (last.style.display === "none") {
+                last.style.display = "block";
+            } else {
+                last.style.display = "none";
+            }
+        });
+        var overlaysTree = [
+            {label: '<img src="legend/MarcTemakortPizzarier_10.png" /> Marc Temakort — Pizzarier', layer: layer_MarcTemakortPizzarier_10},
+            {label: 'fredede områder<br /><table><tr><td style="text-align: center;"><img src="legend/frededeomrder_9_Damhuså0.png" /></td><td>Damhuså</td></tr><tr><td style="text-align: center;"><img src="legend/frededeomrder_9_KalvebodKile1.png" /></td><td>Kalvebod Kile</td></tr><tr><td style="text-align: center;"><img src="legend/frededeomrder_9_RehbæksEng2.png" /></td><td>Rehbæks Eng</td></tr><tr><td style="text-align: center;"><img src="legend/frededeomrder_9_Vestvolden3.png" /></td><td>Vestvolden</td></tr><tr><td style="text-align: center;"><img src="legend/frededeomrder_9_VigerslevparkenDamhussøenDamhusengenKrogebjergparken4.png" /></td><td>Vigerslevparken, Damhussøen, Damhusengen, Krogebjergparken</td></tr><tr><td style="text-align: center;"><img src="legend/frededeomrder_9_5.png" /></td><td></td></tr></table>', layer: layer_frededeomrder_9},
+            {label: '<img src="legend/kommuneplan_8.png" /> kommuneplan', layer: layer_kommuneplan_8},
+            {label: '<img src="legend/Bibliotek_7.png" /> Bibliotek', layer: layer_Bibliotek_7},
+            {label: '<img src="legend/Kirker_6.png" /> Kirker', layer: layer_Kirker_6},
+            {label: '<img src="legend/Togstationer_5.png" /> Togstationer', layer: layer_Togstationer_5},
+            {label: '<img src="legend/Folkeskoler_4.png" /> Folkeskoler', layer: layer_Folkeskoler_4},
+            {label: '<img src="legend/strandbeskyttelsehvidovre_3.png" /> strandbeskyttelsehvidovre', layer: layer_strandbeskyttelsehvidovre_3},
+            {label: 'Angelo Temakort — Hvidovre Lokalplan<br /><table><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_00.png" /></td><td>0</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_11.png" /></td><td>1</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_22.png" /></td><td>2</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_33.png" /></td><td>3</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_44.png" /></td><td>4</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_55.png" /></td><td>5</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_66.png" /></td><td>6</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_77.png" /></td><td>7</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_88.png" /></td><td>8</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_99.png" /></td><td>9</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_1010.png" /></td><td>10</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_1111.png" /></td><td>11</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_1212.png" /></td><td>12</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_1313.png" /></td><td>13</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_1414.png" /></td><td>14</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_1515.png" /></td><td>15</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_1616.png" /></td><td>16</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_1717.png" /></td><td>17</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_1818.png" /></td><td>18</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_1919.png" /></td><td>19</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_2020.png" /></td><td>20</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_2121.png" /></td><td>21</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_2222.png" /></td><td>22</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_2323.png" /></td><td>23</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_2424.png" /></td><td>24</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_2525.png" /></td><td>25</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_2626.png" /></td><td>26</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_2727.png" /></td><td>27</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_2828.png" /></td><td>28</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_2929.png" /></td><td>29</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_3030.png" /></td><td>30</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_3131.png" /></td><td>31</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_3232.png" /></td><td>32</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_3333.png" /></td><td>33</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_3434.png" /></td><td>34</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_3535.png" /></td><td>35</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_3636.png" /></td><td>36</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_3737.png" /></td><td>37</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_3838.png" /></td><td>38</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_3939.png" /></td><td>39</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_4040.png" /></td><td>40</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_4141.png" /></td><td>41</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_4242.png" /></td><td>42</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_4343.png" /></td><td>43</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_4444.png" /></td><td>44</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_4545.png" /></td><td>45</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_4646.png" /></td><td>46</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_4747.png" /></td><td>47</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_4848.png" /></td><td>48</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_4949.png" /></td><td>49</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_5050.png" /></td><td>50</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_5151.png" /></td><td>51</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_5252.png" /></td><td>52</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_5353.png" /></td><td>53</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_5454.png" /></td><td>54</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_5555.png" /></td><td>55</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_5656.png" /></td><td>56</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_5757.png" /></td><td>57</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_5858.png" /></td><td>58</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_5959.png" /></td><td>59</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_6060.png" /></td><td>60</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_6161.png" /></td><td>61</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_6262.png" /></td><td>62</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_6363.png" /></td><td>63</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_6464.png" /></td><td>64</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_6565.png" /></td><td>65</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_6666.png" /></td><td>66</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_6767.png" /></td><td>67</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_6868.png" /></td><td>68</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_6969.png" /></td><td>69</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_7070.png" /></td><td>70</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_7171.png" /></td><td>71</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_7272.png" /></td><td>72</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_7373.png" /></td><td>73</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_7474.png" /></td><td>74</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_7575.png" /></td><td>75</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_7676.png" /></td><td>76</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_7777.png" /></td><td>77</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_7878.png" /></td><td>78</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_7979.png" /></td><td>79</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_8080.png" /></td><td>80</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_8181.png" /></td><td>81</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_8282.png" /></td><td>82</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_8383.png" /></td><td>83</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_8484.png" /></td><td>84</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_8585.png" /></td><td>85</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_8686.png" /></td><td>86</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_8787.png" /></td><td>87</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_8888.png" /></td><td>88</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_8989.png" /></td><td>89</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_9090.png" /></td><td>90</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_9191.png" /></td><td>91</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_9292.png" /></td><td>92</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_9393.png" /></td><td>93</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_9494.png" /></td><td>94</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_9595.png" /></td><td>95</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_9696.png" /></td><td>96</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_9797.png" /></td><td>97</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_9898.png" /></td><td>98</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_9999.png" /></td><td>99</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_100100.png" /></td><td>100</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_101101.png" /></td><td>101</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_102102.png" /></td><td>102</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_103103.png" /></td><td>103</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_104104.png" /></td><td>104</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_105105.png" /></td><td>105</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_106106.png" /></td><td>106</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_107107.png" /></td><td>107</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_108108.png" /></td><td>108</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_109109.png" /></td><td>109</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_110110.png" /></td><td>110</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_111111.png" /></td><td>111</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_112112.png" /></td><td>112</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_113113.png" /></td><td>113</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_114114.png" /></td><td>114</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_115115.png" /></td><td>115</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_116116.png" /></td><td>116</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_117117.png" /></td><td>117</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_118118.png" /></td><td>118</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_119119.png" /></td><td>119</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_120120.png" /></td><td>120</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_121121.png" /></td><td>121</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_122122.png" /></td><td>122</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_123123.png" /></td><td>123</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_124124.png" /></td><td>124</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_125125.png" /></td><td>125</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_126126.png" /></td><td>126</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_127127.png" /></td><td>127</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_128128.png" /></td><td>128</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_129129.png" /></td><td>129</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_130130.png" /></td><td>130</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_131131.png" /></td><td>131</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_132132.png" /></td><td>132</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_133133.png" /></td><td>133</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_134134.png" /></td><td>134</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_135135.png" /></td><td>135</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_136136.png" /></td><td>136</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_137137.png" /></td><td>137</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_138138.png" /></td><td>138</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_139139.png" /></td><td>139</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_140140.png" /></td><td>140</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_141141.png" /></td><td>141</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_142142.png" /></td><td>142</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_143143.png" /></td><td>143</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_144144.png" /></td><td>144</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_145145.png" /></td><td>145</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_146146.png" /></td><td>146</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_147147.png" /></td><td>147</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_148148.png" /></td><td>148</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_149149.png" /></td><td>149</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_150150.png" /></td><td>150</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_151151.png" /></td><td>151</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_152152.png" /></td><td>152</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_153153.png" /></td><td>153</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_154154.png" /></td><td>154</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_155155.png" /></td><td>155</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_156156.png" /></td><td>156</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_157157.png" /></td><td>157</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_158158.png" /></td><td>158</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_159159.png" /></td><td>159</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_160160.png" /></td><td>160</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_161161.png" /></td><td>161</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_162162.png" /></td><td>162</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_163163.png" /></td><td>163</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_164164.png" /></td><td>164</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_165165.png" /></td><td>165</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_166166.png" /></td><td>166</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_167167.png" /></td><td>167</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_168168.png" /></td><td>168</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_169169.png" /></td><td>169</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_170170.png" /></td><td>170</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_171171.png" /></td><td>171</td></tr><tr><td style="text-align: center;"><img src="legend/AngeloTemakortHvidovreLokalplan_2_172.png" /></td><td></td></tr></table>', layer: layer_AngeloTemakortHvidovreLokalplan_2},
+            {label: '<img src="legend/AngeloTemakortFrededefortidsminderlinje_1.png" /> Angelo Temakort — Fredede fortidsminder, linje', layer: layer_AngeloTemakortFrededefortidsminderlinje_1},
+            {label: "Positron [no labels] (retina)", layer: layer_Positronnolabelsretina_0, radioGroup: 'bm' },]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: false, 
+        });
+        lay.addTo(map);
+		document.addEventListener("DOMContentLoaded", function() {
+            // set new Layers List height which considers toggle icon
+            function newLayersListHeight() {
+                var layerScrollbarElement = document.querySelector('.leaflet-control-layers-scrollbar');
+                if (layerScrollbarElement) {
+                    var layersListElement = document.querySelector('.leaflet-control-layers-list');
+                    var originalHeight = layersListElement.style.height 
+                        || window.getComputedStyle(layersListElement).height;
+                    var newHeight = parseFloat(originalHeight) - 50;
+                    layersListElement.style.height = newHeight + 'px';
+                }
+            }
+            var isLayersListExpanded = true;
+            var controlLayersElement = document.querySelector('.leaflet-control-layers');
+            var toggleLayerControl = document.querySelector('.leaflet-control-layers-toggle');
+            // toggle Collapsed/Expanded and apply new Layers List height
+            toggleLayerControl.addEventListener('click', function() {
+                if (isLayersListExpanded) {
+                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
+                } else {
+                    controlLayersElement.classList.add('leaflet-control-layers-expanded');
+                }
+                isLayersListExpanded = !isLayersListExpanded;
+                newLayersListHeight()
+            });	
+			// apply new Layers List height if toggle layerstree
+			if (controlLayersElement) {
+				controlLayersElement.addEventListener('click', function(event) {
+					var toggleLayerHeaderPointer = event.target.closest('.leaflet-layerstree-header-pointer span');
+					if (toggleLayerHeaderPointer) {
+						newLayersListHeight();
+					}
+				});
+			}
+            // Collapsed/Expanded at Start to apply new height
+            setTimeout(function() {
+                toggleLayerControl.click();
+            }, 10);
+            setTimeout(function() {
+                toggleLayerControl.click();
+            }, 10);
+            // Collapsed touch/small screen
+            var isSmallScreen = window.innerWidth < 650;
+            if (isSmallScreen) {
+                setTimeout(function() {
+                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
+                    isLayersListExpanded = !isLayersListExpanded;
+                }, 500);
+            }  
+        });       
+        setBounds();
+        var i = 0;
+        layer_Folkeskoler_4.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['Skolenavn'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['Skolenavn']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Folkeskoler_4'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var i = 0;
+        layer_Togstationer_5.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['Name'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['Name']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Togstationer_5'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var i = 0;
+        layer_Kirker_6.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['navn'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['navn']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Kirker_6'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var i = 0;
+        layer_Bibliotek_7.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['navn'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['navn']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Bibliotek_7'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var i = 0;
+        layer_MarcTemakortPizzarier_10.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['Name'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['Name']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_MarcTemakortPizzarier_10'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        map.addControl(new L.Control.Search({
+            layer: layer_frededeomrder_9,
+            initial: false,
+            hideMarkerOnCollapse: true,
+            propertyName: 'Fred_navn'}));
+        if (typeof url === 'undefined') {
+            document.getElementsByClassName('search-button')[0].className += ' fa fa-binoculars';
+        } else {
+            document.getElementsByClassName('search-button')[1].className += ' fa fa-binoculars';
+        }
+        resetLabels([layer_Folkeskoler_4,layer_Togstationer_5,layer_Kirker_6,layer_Bibliotek_7,layer_MarcTemakortPizzarier_10]);
+        map.on("zoomend", function(){
+            resetLabels([layer_Folkeskoler_4,layer_Togstationer_5,layer_Kirker_6,layer_Bibliotek_7,layer_MarcTemakortPizzarier_10]);
+        });
+        map.on("layeradd", function(){
+            resetLabels([layer_Folkeskoler_4,layer_Togstationer_5,layer_Kirker_6,layer_Bibliotek_7,layer_MarcTemakortPizzarier_10]);
+        });
+        map.on("layerremove", function(){
+            resetLabels([layer_Folkeskoler_4,layer_Togstationer_5,layer_Kirker_6,layer_Bibliotek_7,layer_MarcTemakortPizzarier_10]);
+        });
+        </script>        
+    </body>
+</html>
